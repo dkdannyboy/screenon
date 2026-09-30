@@ -1,0 +1,7 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:id="@+id/widget_root" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="horizontal" android:gravity="center_vertical" android:background="@drawable/widget_bg">
+    <LinearLayout android:id="@+id/widget_open" android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent" android:orientation="vertical" android:gravity="center_vertical" android:contentDescription="ScreenOn 앱 열기">
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="ScreenOn" android:textColor="#FFFFFF" android:textSize="16sp" android:fontFamily="sans-serif-medium" />
+        <TextView android:id="@+id/widget_status" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="유지 꺼짐" android:textColor="#C4D1CC" android:textSize="12sp" android:layout_marginTop="4dp"/>
+    </LinearLayout>
+    <TextView android:id="@+id/widget_toggle" android:layout_width="64dp" android:layout_height="56dp" android:gravity="center" android:background="@drawable/widget_switch" android:text="OFF" android:textColor="#142D27" android:textStyle="bold" android:textSize="18sp" android:contentDescription="화면 켜짐 유지 켜기" />
+</LinearLayout>

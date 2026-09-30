@@ -1,0 +1,11 @@
+<resources>
+    <style name="Theme.ScreenOn" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:colorAccent">#147D64</item>
+        <item name="android:windowBackground">#F5F6F2</item>
+    </style>
+    <string name="app_name">ScreenOn</string>
+    <string name="widget_description">홈 화면에서 화면 켜짐 유지 상태를 확인하고 ON/OFF를 전환하세요.</string>
+</resources>
