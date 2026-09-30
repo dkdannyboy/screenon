@@ -42,7 +42,7 @@ python3 scripts/create-signing-key.py
 
 서명된 APK: `app/build/outputs/apk/release/app-release.apk`.
 
-`.signing/`은 Git에서 제외됩니다. 이 폴더를 안전하게 별도 보관해야 동일한 서명으로 후속 업데이트를 배포할 수 있습니다. 키가 없는 환경의 릴리스 빌드는 unsigned이며, CI는 디버그 APK를 아티팩트로 제공합니다.
+`.signing/`은 Git에서 제외됩니다. 이 폴더를 안전하게 별도 보관해야 동일한 서명으로 후속 업데이트를 배포할 수 있습니다. 키가 없는 환경의 릴리스 빌드는 unsigned이며, CI는 디버그·릴리스·기기 테스트 APK 빌드와 lint 검증을 수행합니다. 설치 파일은 GitHub 릴리스에서 제공합니다.
 
 ## 동작 범위와 검증
 

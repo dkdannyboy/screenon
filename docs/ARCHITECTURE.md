@@ -29,4 +29,4 @@ References checked 2026-09-30:
 
 ## Signing
 
-Release signing material is generated locally under ignored `.signing/`. Preserve it securely for compatible updates. No keys/passwords enter Git. CI has no signing secret and produces a debug APK plus an unsigned release verification build. The distributed release APK is signed locally and verified with apksigner.
+Release signing material is generated locally under ignored `.signing/`. Preserve it securely for compatible updates. No keys/passwords enter Git. CI has no signing secret and validates debug, unsigned release and device-test APK builds plus lint. It writes a job summary without uploading Actions artifacts; installable builds are distributed through Releases. The distributed release APK is signed locally and verified with apksigner.

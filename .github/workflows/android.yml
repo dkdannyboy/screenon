@@ -20,11 +20,17 @@ jobs:
           log-accepted-android-sdk-licenses: false
       - uses: gradle/actions/setup-gradle@v4
       - run: ./gradlew assembleDebug assembleRelease lintDebug assembleDebugAndroidTest
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ScreenOn-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
-      - uses: actions/upload-artifact@v4
-        with:
-          name: lint-report
-          path: app/build/reports/lint-results-debug.html
+      - name: Build summary
+        run: |
+          python3 - <<'PYTHON'
+          import os
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          report = ET.parse('app/build/reports/lint-results-debug.xml').getroot()
+          errors = sum(issue.get('severity') == 'Error' for issue in report.findall('issue'))
+          assert errors == 0
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              summary.write('Debug APK, release APK, and device-test APK compiled successfully.\n\n')
+              summary.write(f'Android lint: {errors} errors.\n\n')
+              summary.write('Installable signed APKs are distributed through [GitHub Releases](https://github.com/dkdannyboy/screenon/releases/latest). CI does not consume Actions artifact storage.\n')
+          PYTHON
