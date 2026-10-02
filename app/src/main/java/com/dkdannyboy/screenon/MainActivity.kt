@@ -1,5 +1,9 @@
 package com.dkdannyboy.screenon
 
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
+import android.view.WindowManager
 import android.Manifest
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
@@ -77,8 +81,29 @@ private fun ScreenOnScreen() {
     val context = LocalContext.current
     val state by AwakeController.state.collectAsState()
     var help by remember { mutableStateOf(false) }
+    var compatibilityDialog by remember { mutableStateOf(false) }
+    val guard = remember { TimeoutGuard(context) }
+    var compatibility by remember { mutableStateOf(guard.enabled()) }
+    val settingsLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        if (!state.enabled) {
+            val restored = guard.restore()
+            if (!restored) AwakeController.publish(context, AwakeState(error = TimeoutGuard.RESTORE_ERROR))
+        }
+        ScreenOnWidget.refresh(context)
+        Toast.makeText(context, if (Settings.System.canWrite(context)) "설정이 준비됐어요. ON을 눌러주세요." else "권한이 허용되지 않았어요. 호환 모드 설정에서 다시 확인해 주세요.", Toast.LENGTH_LONG).show()
+    }
+    DisposableEffect(state.enabled) {
+        val window = (context as? ComponentActivity)?.window
+        if (state.enabled) window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        else window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        onDispose { window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+    }
     val notifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { /* Optional. ON is independent. */ }
     fun switch(enabled: Boolean) {
+        if (enabled && guard.needsPermission()) {
+            compatibilityDialog = true
+            return
+        }
         AwakeController.setEnabled(context, enabled)
         if (enabled && Build.VERSION.SDK_INT >= 33 && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             val prefs = context.getSharedPreferences("ui", 0)
@@ -126,6 +151,9 @@ private fun ScreenOnScreen() {
                     ModeButton("OFF", !state.enabled, Modifier.weight(1f)) { switch(false) }
                     ModeButton("ON", state.enabled, Modifier.weight(1f)) { switch(true) }
                 }
+                TextButton(onClick = { compatibilityDialog = true }, enabled = !state.enabled) {
+                    Text(if (compatibility) "호환 모드 켜짐 · 설정" else "화면이 꺼진다면 · 호환 모드 설정")
+                }
                 state.error?.let {
                     Text(it, color = c.error, modifier = Modifier.padding(top = 16.dp).semantics { liveRegion = LiveRegionMode.Assertive })
                 }
@@ -156,6 +184,39 @@ private fun ScreenOnScreen() {
             }
         }
     }
+    if (compatibilityDialog) AlertDialog(
+        onDismissRequest = { compatibilityDialog = false },
+        title = { Text("갤럭시 화면 유지 호환 모드") },
+        text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("ON인데도 화면이 꺼지는 기기에서 사용하세요. 화면 유지 잠금과 함께 자동 꺼짐 시간을 늘려 보호합니다. 다른 앱 위에는 아무것도 표시하지 않습니다.")
+            Text("최초 한 번 '시스템 설정 변경 허용'을 켜주세요. 돌아온 뒤 ON을 누르면 적용되며, OFF 또는 전원 버튼으로 잠그면 원래 시간으로 복원합니다.")
+            Text("호환 모드 사용 중 앱을 강제 종료하거나 삭제하면 긴 화면 꺼짐 시간이 남을 수 있습니다. 먼저 OFF를 누르세요. 강제 종료한 경우 앱을 다시 열면 복원을 시도합니다.")
+            Text("기기 절전·관리 정책에 따라 제한될 수 있습니다. 허용 여부만으로 이 기기에서의 유지가 검증되는 것은 아닙니다.")
+        } },
+        confirmButton = { TextButton(onClick = {
+            guard.setEnabled(true)
+            compatibility = true
+            compatibilityDialog = false
+            if (!Settings.System.canWrite(context)) {
+                try {
+                    settingsLauncher.launch(Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, Uri.parse("package:${context.packageName}")))
+                } catch (_: RuntimeException) {
+                    Toast.makeText(context, "설정 앱의 특별한 접근 → 시스템 설정 변경에서 ScreenOn을 허용해 주세요.", Toast.LENGTH_LONG).show()
+                }
+            } else {
+                guard.restore()
+                ScreenOnWidget.refresh(context)
+            }
+        }) { Text("호환 모드 설정") } },
+        dismissButton = { TextButton(onClick = {
+            if (guard.restore()) {
+                guard.setEnabled(false)
+                compatibility = false
+                compatibilityDialog = false
+                ScreenOnWidget.refresh(context)
+            } else AwakeController.publish(context, AwakeState(error = TimeoutGuard.RESTORE_ERROR))
+        }) { Text("기본 모드 사용") } }
+    )
     if (help) AlertDialog(
         onDismissRequest = { help = false }, title = { Text("화면 켜짐, 필요한 만큼만") },
         text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {

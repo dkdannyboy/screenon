@@ -25,6 +25,7 @@ class ScreenOnDeviceTest {
     private var oldTimeout = "60000"
     private var oldStayAwake = "0"
     @Before fun launch() {
+        TimeoutGuard(context).setEnabled(false)
         oldTimeout = device.executeShellCommand("settings get system screen_off_timeout").trim()
         oldStayAwake = device.executeShellCommand("settings get global stay_on_while_plugged_in").trim()
         device.executeShellCommand("settings put global stay_on_while_plugged_in 0")
@@ -38,7 +39,10 @@ class ScreenOnDeviceTest {
         setEnabled(false)
     }
     @After fun cleanup() {
+        allowTimeoutWrites(true)
         setEnabled(false)
+        TimeoutGuard(context).restore()
+        TimeoutGuard(context).setEnabled(false)
         device.executeShellCommand("settings put system screen_off_timeout $oldTimeout")
         device.executeShellCommand("settings put global stay_on_while_plugged_in $oldStayAwake")
         device.wakeUp()
@@ -112,10 +116,79 @@ class ScreenOnDeviceTest {
         assertFalse(activeLocks().contains("ScreenOn:display"))
         device.pressBack()
     }
-    @Test fun noOverlayNetworkOrSettingsPermissionDeclared() {
+    private fun allowTimeoutWrites(allow: Boolean) {
+        device.executeShellCommand("appops set ${context.packageName} WRITE_SETTINGS ${if (allow) "allow" else "deny"}")
+    }
+    @Test fun compatibilityAlonePreventsTimeoutAndRestoresSleep() {
+        allowTimeoutWrites(true)
+        val guard = TimeoutGuard(context)
+        guard.setEnabled(true)
+        guard.begin()
+        assertEquals(TimeoutGuard.KEEP_TIMEOUT, guard.current())
+        // No service/display wake lock: independently verify the new fallback.
+        assertFalse(activeLocks().contains("ScreenOn:display"))
+        context.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        assertTrue(device.wait(Until.hasObject(By.pkg("com.android.settings")), 5000))
+        Thread.sleep(22000)
+        assertTrue(power.isInteractive)
+        assertTrue(guard.restore())
+        assertEquals(15000, guard.current())
+        Thread.sleep(22000)
+        assertFalse(power.isInteractive)
+    }
+    @Test fun compatibilityServiceRestoresAfterPowerButton() {
+        allowTimeoutWrites(true)
+        val guard = TimeoutGuard(context)
+        guard.setEnabled(true)
+        setEnabled(true)
+        assertEquals(TimeoutGuard.KEEP_TIMEOUT, guard.current())
+        setEnabled(true)
+        device.sleep()
+        Thread.sleep(1200)
+        assertFalse(AwakeController.state.value.enabled)
+        assertEquals(15000, guard.current())
+        assertFalse(guard.pendingRestore())
+    }
+    @Test fun compatibilityStopsIfUserOrPolicyChangesTimeout() {
+        allowTimeoutWrites(true)
+        val guard = TimeoutGuard(context)
+        guard.setEnabled(true)
+        setEnabled(true)
+        device.executeShellCommand("settings put system screen_off_timeout 30000")
+        Thread.sleep(1200)
+        assertFalse(AwakeController.state.value.enabled)
+        assertEquals(30000, guard.current())
+        assertFalse(guard.pendingRestore())
+        assertNotNull(AwakeController.state.value.error)
+    }
+    @Test fun missingPermissionNeverClaimsOnOrChangesTimeout() {
+        allowTimeoutWrites(false)
+        val guard = TimeoutGuard(context)
+        guard.setEnabled(true)
+        instrumentation.runOnMainSync { AwakeController.setEnabled(context, true) }
+        Thread.sleep(500)
+        assertFalse(AwakeController.state.value.enabled)
+        assertEquals(15000, guard.current())
+        assertNotNull(AwakeController.state.value.error)
+        assertFalse(guard.pendingRestore())
+    }
+    @Test fun restorationJournalSurvivesRecreationAndPermissionLoss() {
+        allowTimeoutWrites(true)
+        val guard = TimeoutGuard(context)
+        guard.setEnabled(true)
+        guard.begin()
+        allowTimeoutWrites(false)
+        assertFalse(TimeoutGuard(context).restore())
+        assertTrue(guard.pendingRestore())
+        allowTimeoutWrites(true)
+        assertTrue(TimeoutGuard(context).restore())
+        assertEquals(15000, guard.current())
+        assertFalse(guard.pendingRestore())
+    }
+    @Test fun noOverlayOrNetworkPermissionDeclared() {
         val permissions = context.packageManager.getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS).requestedPermissions.orEmpty().toList()
         assertFalse(permissions.contains(Manifest.permission.SYSTEM_ALERT_WINDOW))
-        assertFalse(permissions.contains(Manifest.permission.WRITE_SETTINGS))
+        assertTrue(permissions.contains(Manifest.permission.WRITE_SETTINGS))
         assertFalse(permissions.contains(Manifest.permission.INTERNET))
     }
 }

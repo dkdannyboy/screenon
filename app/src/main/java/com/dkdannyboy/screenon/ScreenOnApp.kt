@@ -19,7 +19,12 @@ object AwakeController {
     fun setEnabled(context: Context, enabled: Boolean) {
         if (!enabled) {
             context.stopService(Intent(context, KeepAwakeService::class.java))
-            publish(context, AwakeState())
+            val restored = TimeoutGuard(context).restore()
+            publish(context, AwakeState(error = if (restored) null else TimeoutGuard.RESTORE_ERROR))
+            return
+        }
+        if (TimeoutGuard(context).needsPermission()) {
+            publish(context, AwakeState(error = "호환 모드 설정에서 시스템 설정 변경을 허용해 주세요."))
             return
         }
         try {
@@ -34,6 +39,7 @@ class ScreenOnApp : Application() {
     override fun onCreate() {
         super.onCreate()
         // Also repairs stale launcher widgets after process death or a device reboot.
-        ScreenOnWidget.refresh(this)
+        val restored = TimeoutGuard(this).restore()
+        AwakeController.publish(this, AwakeState(error = if (restored) null else TimeoutGuard.RESTORE_ERROR))
     }
 }
